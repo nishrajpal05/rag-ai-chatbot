@@ -9,17 +9,16 @@ from app.utils.prompts import RAG_SYSTEM_PROMPT
 logger = logging.getLogger(__name__)
 
 class RAGRetriever:
-    def __init__(self, top_k: int = 4):
+    def __init__(self, top_k: int = 3):
         self.top_k = top_k
     
     def retrieve_and_generate(
         self, 
         query: str, 
-        similarity_threshold: float = 0.5
+        similarity_threshold: float = 0.3  # ✅ Adjusted for new embeddings
     ) -> Dict:
         """Retrieve relevant chunks and generate answer"""
         
-        # ✅ DEBUG LOGGING
         logger.info("=" * 60)
         logger.info(f" NEW QUERY: {query}")
         logger.info(f" Threshold: {similarity_threshold}")
@@ -32,7 +31,7 @@ class RAGRetriever:
         results = vector_store.search(query_embedding, k=self.top_k)
         logger.info(f" Retrieved {len(results)} results from vector store")
         
-        #  LOG ALL SCORES
+        # LOG ALL SCORES
         if results:
             for i, (doc, score, meta) in enumerate(results):
                 logger.info(f"  Result {i+1}: score={score:.4f}, source={meta.get('source', 'N/A')}")
@@ -46,7 +45,7 @@ class RAGRetriever:
             if score >= similarity_threshold
         ]
         
-        logger.info(f" Filtered: {len(filtered_results)}/{len(results)} passed threshold")
+        logger.info(f"✅ Filtered: {len(filtered_results)}/{len(results)} passed threshold")
         
         if not filtered_results:
             logger.warning(" FILTERING REMOVED ALL RESULTS!")
@@ -73,20 +72,21 @@ class RAGRetriever:
             scores.append(score)
         
         context = "\n\n---\n\n".join(context_parts)
-        logger.info(f" Context built: {len(context)} characters")
+        logger.info(f"📝 Context built: {len(context)} characters")
         
         # Step 5: Generate answer
+        from app.utils.prompts import RAG_SYSTEM_PROMPT
         prompt = RAG_SYSTEM_PROMPT.format(context=context, question=query)
-        logger.info(f" Sending to LLM (prompt length: {len(prompt)} chars)...")
+        logger.info(f" Sending to Groq LLM (prompt length: {len(prompt)} chars)...")
         
         answer = llm_handler.generate(prompt)
-        logger.info(f" LLM response: {answer[:100]}...")
+        logger.info(f"✅ LLM response: {answer[:100]}...")
         
-        # Calculate confidence
+        # Calculate confidence (adjusted thresholds for cosine similarity)
         avg_score = sum(scores) / len(scores)
-        confidence = "high" if avg_score > 0.7 else "medium" if avg_score > 0.5 else "low"
+        confidence = "high" if avg_score > 0.5 else "medium" if avg_score > 0.3 else "low"
         
-        logger.info(f" Final confidence: {confidence} (avg_score={avg_score:.4f})")
+        logger.info(f"🎯 Final confidence: {confidence} (avg_score={avg_score:.4f})")
         logger.info("=" * 60)
         
         return {
