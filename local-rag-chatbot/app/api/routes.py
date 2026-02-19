@@ -145,10 +145,9 @@ async def scrape_website(request: ScrapeRequest):
 async def ask_question(request: QuestionRequest):
     """Ask a question based on uploaded documents"""
     try:
-        #  CRITICAL FIX: Pass lower similarity threshold as model is not giving answers 
         answer, sources, confidence = qa_service.answer_question(
             request.question,
-            similarity_threshold=0.0001  # Lowered from default 0.5
+            similarity_threshold=0.3  # ✅ Good for cosine similarity
         )
         
         return QuestionResponse(
