@@ -1,90 +1,64 @@
-
 import logging
-import requests
-from typing import Optional
+from groq import Groq
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-class OllamaLLMHandler:
-    def __init__(self, model_name: str = "gemma:7b", base_url: str = "http://localhost:11434"):
-        self.model_name = model_name
-        self.base_url = base_url
-        self.generate_url = f"{base_url}/api/generate"
-        logger.info(f"Initialized Ollama LLM with model: {model_name}")
+class GroqLLMHandler:
+    def __init__(self):
+        if not settings.GROQ_API_KEY:
+            raise ValueError("GROQ_API_KEY not found in environment variables")
+        
+        self.client = Groq(api_key=settings.GROQ_API_KEY)
+        self.model = settings.GROQ_MODEL
+        logger.info(f"Initialized Groq LLM with model: {self.model}")
     
     def generate(self, prompt: str, max_tokens: int = 512) -> str:
-        """Generate response from Ollama"""
+        """Generate response from Groq API"""
         try:
-            logger.info(f" Generating response with {self.model_name}")
+            logger.info(f" Generating response with {self.model}")
             logger.debug(f"Prompt length: {len(prompt)} chars")
             
-            payload = {
-                "model": self.model_name,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "num_predict": max_tokens,
-                    "temperature": 0.1,  # Low temperature for factual responses
-                    "top_p": 0.9,
-                    "top_k": 40
-                }
-            }
-            
-            response = requests.post(
-                self.generate_url,
-                json=payload,
-                timeout=60  # 60 second timeout
+            chat_completion = self.client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful AI assistant that answers questions based only on provided context."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                model=self.model,
+                temperature=0.1,
+                max_tokens=max_tokens,
+                top_p=0.9,
             )
             
-            if response.status_code != 200:
-                logger.error(f" Ollama API error: {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                return "Error: Unable to generate response from LLM."
-            
-            result = response.json()
-            answer = result.get('response', '').strip()
-            
+            answer = chat_completion.choices[0].message.content.strip()
             logger.info(f" Generated {len(answer)} characters")
+            
             return answer
             
-        except requests.exceptions.Timeout:
-            logger.error(" Ollama request timed out")
-            return "Error: Request timed out. The model may be too slow."
-        except requests.exceptions.ConnectionError:
-            logger.error(" Cannot connect to Ollama. Is it running?")
-            return "Error: Cannot connect to Ollama. Please ensure Ollama is running."
         except Exception as e:
-            logger.error(f" Error generating response: {str(e)}")
-            return f"Error: {str(e)}"
+            logger.error(f" Error generating response from Groq: {str(e)}")
+            return f"Error: Unable to generate response. {str(e)}"
     
     def check_health(self) -> bool:
-        """Check if Ollama is running and model is available"""
+        """Check if Groq API is accessible"""
         try:
-            # Check if Ollama is running
-            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
-            if response.status_code != 200:
-                return False
-            
-            # Check if our model is available
-            models = response.json().get('models', [])
-            model_names = [model.get('name', '') for model in models]
-            
-            # Check for exact match or base model name
-            model_available = any(
-                self.model_name in name or name.startswith(self.model_name.split(':')[0])
-                for name in model_names
+            # Try a simple completion
+            self.client.chat.completions.create(
+                messages=[{"role": "user", "content": "test"}],
+                model=self.model,
+                max_tokens=5
             )
-            
-            if model_available:
-                logger.info(f" Model {self.model_name} is available")
-            else:
-                logger.warning(f" Model {self.model_name} not found. Available: {model_names}")
-            
-            return model_available
-            
+            logger.info(" Groq API is healthy")
+            return True
         except Exception as e:
-            logger.error(f" Health check failed: {str(e)}")
+            logger.error(f" Groq API health check failed: {str(e)}")
             return False
 
-#  CREATE SINGLETON INSTANCE
-llm_handler = OllamaLLMHandler()
+# Global singleton
+llm_handler = GroqLLMHandler()
