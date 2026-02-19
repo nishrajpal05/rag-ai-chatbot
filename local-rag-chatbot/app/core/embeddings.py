@@ -1,70 +1,43 @@
 import logging
-import requests
-import numpy as np
+from sentence_transformers import SentenceTransformer
 from typing import List
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-class OllamaEmbeddings:
-    def __init__(self, model_name: str = "nomic-embed-text", base_url: str = "http://localhost:11434"):
-        self.model_name = model_name
-        self.base_url = base_url
-        self.embed_url = f"{base_url}/api/embeddings"
-        logger.info(f"Initialized Ollama Embeddings with model: {model_name}")
+class LocalEmbeddings:
+    def __init__(self):
+        logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL}")
+        self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        logger.info(f"✅ Embedding model loaded (dimension: {settings.VECTOR_DIMENSION})")
     
     def embed_query(self, text: str) -> List[float]:
         """Generate embedding for a single text"""
         try:
-            payload = {
-                "model": self.model_name,
-                "prompt": text
-            }
-            
-            response = requests.post(
-                self.embed_url,
-                json=payload,
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                logger.error(f" Embedding API error: {response.status_code}")
-                raise Exception(f"Embedding failed: {response.text}")
-            
-            result = response.json()
-            embedding = result.get('embedding', [])
-            
-            if not embedding:
-                raise Exception("Empty embedding returned")
-            
-            logger.debug(f" Generated embedding: {len(embedding)} dimensions")
-            return embedding
-            
-        except requests.exceptions.Timeout:
-            logger.error(" Embedding request timed out")
-            raise Exception("Embedding timeout")
-        except requests.exceptions.ConnectionError:
-            logger.error(" Cannot connect to Ollama for embeddings")
-            raise Exception("Cannot connect to Ollama. Ensure it's running.")
+            embedding = self.model.encode(text, convert_to_numpy=True)
+            return embedding.tolist()
         except Exception as e:
-            logger.error(f" Error generating embedding: {str(e)}")
+            logger.error(f"❌ Error generating embedding: {str(e)}")
             raise
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for multiple texts"""
-        embeddings = []
-        for i, text in enumerate(texts):
-            logger.info(f"Embedding document {i+1}/{len(texts)}")
-            embedding = self.embed_query(text)
-            embeddings.append(embedding)
-        return embeddings
+        try:
+            logger.info(f"Generating embeddings for {len(texts)} documents...")
+            embeddings = self.model.encode(texts, convert_to_numpy=True, show_progress_bar=True)
+            logger.info(f"✅ Generated {len(embeddings)} embeddings")
+            return embeddings.tolist()
+        except Exception as e:
+            logger.error(f"❌ Error generating embeddings: {str(e)}")
+            raise
     
     def check_health(self) -> bool:
-        """Check if embedding model is available"""
+        """Check if embedding model is loaded"""
         try:
             test_embedding = self.embed_query("test")
-            return len(test_embedding) > 0
+            return len(test_embedding) == settings.VECTOR_DIMENSION
         except:
             return False
 
-#  CREATE SINGLETON INSTANCE
-embedding_model = OllamaEmbeddings()
+# Global singleton
+embedding_model = LocalEmbeddings()
