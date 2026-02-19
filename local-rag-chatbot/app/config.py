@@ -1,35 +1,36 @@
-from pydantic_settings import BaseSettings
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
-class Settings(BaseSettings):
-    # App Settings
-    APP_NAME: str = "Local RAG Chatbot"
-    DEBUG: bool = True
+# Load environment variables
+load_dotenv()
+
+class Settings:
+    APP_NAME = "Local RAG Assistant"
+    APP_VERSION = "2.0.0"
+    APP_DESCRIPTION = "AI-powered document Q&A system with Groq API"
     
-    # Ollama Settings
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    LLM_MODEL: str = "gemma:7b"
-    EMBEDDING_MODEL: str = "nomic-embed-text"
+    # Groq API settings
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    GROQ_MODEL = "llama-3.3-70b-versatile"  # Fast and high quality
     
-    # Document Processing
-    CHUNK_SIZE: int = 1000
-    CHUNK_OVERLAP: int = 200
-    MAX_FILE_SIZE_MB: int = 50
+    # Embedding settings (using sentence-transformers locally)
+    EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # Fast, 384 dimensions
     
-    # Retrieval Settings
-    TOP_K_RESULTS: int = 4
-    SIMILARITY_THRESHOLD: float = 0.35
+    # Vector store settings
+    VECTOR_DIMENSION = 384  # Changed from 768 to match all-MiniLM-L6-v2
+    CHUNK_SIZE = 1000
+    CHUNK_OVERLAP = 200
+    TOP_K_RESULTS = 3
+    SIMILARITY_THRESHOLD = 0.3
     
-    # Paths
-    BASE_DIR: Path = Path(__file__).resolve().parent.parent
-    UPLOAD_DIR: Path = BASE_DIR / "app" / "storage" / "uploads"
-    INDEX_DIR: Path = BASE_DIR / "app" / "storage" / "indices"
+    # Storage paths
+    STORAGE_DIR = Path("app/storage")
+    UPLOAD_DIR = STORAGE_DIR / "uploads"
+    INDEX_DIR = STORAGE_DIR / "indices"
     
-    class Config:
-        env_file = ".env"
+    # Create directories
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
 settings = Settings()
-
-# Create directories if they don't exist
-settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-settings.INDEX_DIR.mkdir(parents=True, exist_ok=True)
